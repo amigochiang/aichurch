@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>AI Church - TEST LIVE</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+body{font-family:system-ui;background:#fff8e6;color:#2b2117;padding:20px}
+.box{background:white;border:2px solid #d4af37;border-radius:16px;padding:20px;max-width:600px;margin:20px auto}
+.ok{color:green;font-weight:bold} .bad{color:red;font-weight:bold}
+code{background:#fff3d0;padding:2px 6px;border-radius:6px}
+pre{background:#1a130a;color:#ffe8b3;padding:12px;border-radius:10px;overflow:auto;font-size:12px}
+</style>
+</head>
+<body>
+<div class="box">
+<h2>AI Church - LIVE Test</h2>
+<div id="status">Checking...</div>
+<div id="config" style="margin-top:12px"></div>
+<div id="test" style="margin-top:12px"></div>
+<pre id="log"></pre>
+<button onclick="testInsert()" style="margin-top:10px;padding:10px 20px;border-radius:20px;border:1px solid #d4af37;background:#fff3d0;font-weight:bold">Test Insert Prayer</button>
+</div>
+
+<script>
+// ===== CORRECT CONFIG - NO TYPO, NO /rest/v1/ =====
+window.CHURCH_CONFIG = {
+  SUPABASE_URL: "https://tsgqxpuyjgdhwwfuebhc.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzZ3F4cHV5amdkaHd3ZnVlYmhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM3Nzc4MDcsImV4cCI6MjEwOTM1MzgwN30.Yd_WNfpUGa08AHsZ",
+  ADMIN_PASSWORD: "Motoko14!!",
+  ADMIN_EMAIL: "amigochiang@gmail.com",
+  CHURCH_NAME: "AI Church"
+};
+
+function log(msg){ document.getElementById('log').textContent += msg + "\n"; console.log(msg); }
+
+async function run(){
+  const cfgDiv = document.getElementById('config');
+  const statusDiv = document.getElementById('status');
+  
+  // Check typos
+  const hasDoubleS = window.CHURCH_CONFIG.hasOwnProperty('SSUPABASE_URL');
+  const url = window.CHURCH_CONFIG.SUPABASE_URL || "";
+  const hasRest = url.includes('/rest/v1');
+  
+  cfgDiv.innerHTML = `
+    <div>SUPABASE_URL: <code>${url}</code> ${hasRest ? '<span class="bad">HAS /rest/v1/ - WRONG!</span>' : '<span class="ok">OK - no /rest/v1/</span>'}</div>
+    <div>SSUPABASE_URL exists? ${hasDoubleS ? '<span class="bad">YES - TYPO! Should be SUPABASE_URL</span>' : '<span class="ok">No - Good</span>'}</div>
+    <div>ANON KEY length: ${window.CHURCH_CONFIG.SUPABASE_ANON_KEY.length} ${window.CHURCH_CONFIG.SUPABASE_ANON_KEY.length < 100 ? '<span class="bad">TOO SHORT - need full key!</span>' : '<span class="ok">Looks OK</span>'}</div>
+  `;
+  
+  if (hasDoubleS || hasRest || window.CHURCH_CONFIG.SUPABASE_ANON_KEY.length < 100) {
+    statusDiv.innerHTML = '<span class="bad">CONFIG ERROR - Fix typo /rest/v1/ and anon key full length</span>';
+    return;
+  }
+  
+  // Try Supabase
+  try {
+    const supa = window.supabase.createClient(window.CHURCH_CONFIG.SUPABASE_URL, window.CHURCH_CONFIG.SUPABASE_ANON_KEY);
+    log("Supabase client created: " + window.CHURCH_CONFIG.SUPABASE_URL);
+    
+    // Try select
+    const { data, error } = await supa.from('church_events').select('*').limit(1);
+    if (error) {
+      statusDiv.innerHTML = '<span class="bad">DEMO - Supabase error: ' + error.message + '</span>';
+      log("Select error: " + JSON.stringify(error));
+      // Check if table exists
+      if (error.message.includes('does not exist')) {
+        log("Table church_events does not exist - create it in SQL Editor");
+      }
+      if (error.message.includes('JWT') || error.message.includes('API key')) {
+        log("ANON KEY invalid or truncated - copy full key from Settings -> API Keys -> anon public -> Reveal");
+      }
+    } else {
+      statusDiv.innerHTML = '<span class="ok">LIVE • Connected to Supabase! Table exists, ' + data.length + ' rows found</span>';
+      log("Select OK: " + JSON.stringify(data));
+      
+      // Try realtime
+      const channel = supa.channel('test-live');
+      channel.subscribe((status)=>{
+        log("Realtime status: " + status);
+        if (status === 'SUBSCRIBED') {
+          document.getElementById('test').innerHTML = '<span class="ok">Realtime SUBSCRIBED - LIVE works!</span>';
+        }
+      });
+    }
+  } catch (e) {
+    statusDiv.innerHTML = '<span class="bad">DEMO - Exception: ' + e.message + '</span>';
+    log("Exception: " + e.message);
+  }
+}
+
+async function testInsert(){
+  log("Testing insert...");
+  try {
+    const supa = window.supabase.createClient(window.CHURCH_CONFIG.SUPABASE_URL, window.CHURCH_CONFIG.SUPABASE_ANON_KEY);
+    const { data, error } = await supa.from('church_events').insert({
+      user_id: 'test-human-' + Math.random().toString(36).slice(2,6),
+      user_type: 'human',
+      action: 'candle',
+      intention: 'Peace & Anxiety',
+      country: 'Local',
+      language: navigator.language
+    }).select();
+    if (error) {
+      log("Insert error: " + JSON.stringify(error));
+      alert("Insert failed: " + error.message);
+    } else {
+      log("Insert OK: " + JSON.stringify(data));
+      alert("LIVE! Insert worked - check Tables -> church_events in Supabase, you should see new row");
+    }
+  } catch (e) {
+    log("Insert exception: " + e.message);
+    alert(e.message);
+  }
+}
+
+run();
+</script>
+</body>
+</html>
